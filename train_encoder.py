@@ -9,17 +9,18 @@ import src.utilities.utils as utils
 import tensorflow as tf
 import pandas as pd
 from tqdm import tqdm
-
+from src.utils.config import Config
 
 class Trainer:
     def __init__(self):
-        self.log_dir = 'log/collection/csv/50'
-        self.proto_config = utils.parse_protocols_config()
-        self.feature_settings = utils.parse_features_config()
-        self.config = utils.parse_training_config()
-        self.kappa = self.config['reward']['kappa']
-        self.zeta = self.config['reward']['zeta']
-        self.pool = [p for p in self.proto_config.keys()]
+        # self.log_dir = 'log/collection/csv/50'
+        # self.proto_config = utils.parse_protocols_config()
+        # self.feature_settings = utils.parse_features_config()
+        # self.config = utils.parse_training_config()
+        # self.kappa = self.config['reward']['kappa']
+        # self.zeta = self.config['reward']['zeta']
+        # self.pool = [p for p in self.proto_config.keys()]
+        self.config = Config('config.yaml')
 
         # Features stats
         self.feature_names = self.feature_settings['kernel_info'] # List of features
@@ -33,7 +34,7 @@ class Trainer:
     def build_dataset(self):
         # Read the csv files in the log directory
         datasets = []
-        for f in tqdm(os.listdir(self.log_dir)):
+        for f in tqdm(os.listdir(self.config.collection_dir)):
             print("Processing file", f, "...")
             if f.endswith('.csv'):
                 print(f)

@@ -14,10 +14,10 @@ from src.utils.data_preprocessor import DataPreprocessor
 from src.network.netlink_communicator import NetlinkCommunicator
 
 class Collector:
-    def __init__(self, protocol: str, n_steps: int, config: Config, netcomm: NetlinkCommunicator):
-        self.protocol = protocol
+    def __init__(self, n_steps: int, config: Config, netcomm: NetlinkCommunicator):
         self.n_steps = n_steps
         self.config = config
+        self.netcomm = netcomm
         self.kernel_request = KernelRequest(config.num_fields_kernel, netcomm)
         self.data_preprocessor = DataPreprocessor(config)
         self.logger = Logger(config)
@@ -26,12 +26,15 @@ class Collector:
 
     def run_collection(self):
         self.kernel_request.start()
-        print(f"Running {self.protocol} for {self.n_steps} steps...")
-        for step in range(self.n_steps):
-            step_data = self._collect_step_data()
-            self.raw_data.extend(step_data)
-            print(f"Step {step + 1}/{self.n_steps}")
-            # self._process_and_log_data(step_data)
+        # list of protocols
+        for protocol, id in self.config.protocols.items():
+            print(f"Running {protocol} ({id}) for {self.n_steps} steps...")
+            self.netcomm.change_cca(id)
+            for step in range(self.n_steps):
+                step_data = self._collect_step_data()
+                self.raw_data.extend(step_data)
+                # print(f"Step {step + 1}/{self.n_steps}")
+
         self.kernel_request.stop()
         print("Raw data collection completed. Processing data...")
 
@@ -69,16 +72,17 @@ class Collector:
         while time.time() - step_start <= self.config.step_wait:
             raw_data = self.kernel_request.read_data()
             self.kernel_request.queue.task_done()
-            print(raw_data)
+            # print(raw_data)
             if raw_data:
                 step_data.append(raw_data)
+        # print(raw_data)
         self.kernel_request.disable()
         self.kernel_request.flush()
 
         return step_data
 
     def _is_valid_sample(self, data: Dict) -> bool:
-        return data['thruput'] <= 192 and data['rtt'] >= self.config.rtt
+        return data['thruput'] <= 300 and data['rtt'] >= self.config.rtt
 
     # def _collect_step_data(self) -> List[Dict]:
     #     step_data = []

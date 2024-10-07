@@ -27,6 +27,7 @@ class Logger:
             + f'{self.config.rtt}_{self.config.q_size}.csv'
         
         csv_file = os.path.join(self.log_dir, filename)
+        print(f"Logging data to {csv_file}")
         with open(csv_file, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=self.features)
             writer.writeheader()

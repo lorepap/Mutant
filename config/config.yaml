@@ -1,7 +1,6 @@
 ---
 bw: 12
 bw_factor: 1
-delay: 100
 rtt: 20
 bdp_mult: 2
 num_steps: 1000

@@ -30,8 +30,6 @@ class DataPreprocessor:
         stats = self.feature_extractor.get_statistics()
         for window_size in self.config.window_sizes:
             for feature in self.config.train_stat_features:
-                if feature == 'srtt' and window_size == 10:
-                    print("[DEBUG]")
                 data[f'{feature}_avg_{window_size}'] = stats[window_size]['avg'][feature]
                 data[f'{feature}_min_{window_size}'] = stats[window_size]['min'][feature]
                 data[f'{feature}_max_{window_size}'] = stats[window_size]['max'][feature]
