@@ -1,0 +1,68 @@
+---
+bw: 12
+bw_factor: 1
+delay: 100
+rtt: 20
+bdp_mult: 2
+num_steps: 1000
+num_fields_kernel: 14
+reward:
+  zeta: 5
+  kappa: 2
+step_wait: 0.5
+pool_size: 4
+
+kernel_info:
+  - now
+  - cwnd
+  - rtt
+  - srtt
+  - rtt_dev
+  - rtt_min
+  - mss
+  - delivered
+  - lost
+  - in_flight
+  - retransmitted
+  - delivery_rate
+  - prev_proto_id
+  - crt_proto_id
+  - thruput
+  - loss_rate
+
+train_stat_features:
+  - srtt
+  - rtt_dev
+  - lost
+  - in_flight
+  - thruput
+
+train_non_stat_features:
+  - cwnd
+  - rtt
+  - srtt
+  - rtt_dev
+  - lost
+  - in_flight
+  - delivery_rate
+  - crt_proto_id
+  - thruput
+  - loss_rate
+
+window_sizes:
+  - 10
+  - 200
+  - 1000
+
+protocols:
+  cubic: 0
+  hybla: 1
+  bbr: 2
+  westwood: 3
+  veno: 4
+  vegas: 5
+  yeah: 6
+  bic: 8
+  htcp: 9
+  highspeed: 10
+  illinois: 11
