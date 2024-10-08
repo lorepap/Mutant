@@ -9,7 +9,6 @@ import numpy as np
 from src.core.kernel_request import KernelRequest
 from src.utils.config import Config
 from src.utils.logger import Logger
-from src.utils.feature_extractor import FeatureExtractor
 from src.utils.data_preprocessor import DataPreprocessor
 from src.network.netlink_communicator import NetlinkCommunicator
 
@@ -26,6 +25,7 @@ class Collector:
 
     def run_collection(self):
         self.kernel_request.start()
+        self.kernel_request.enable()
         # list of protocols
         for protocol, id in self.config.protocols.items():
             print(f"Running {protocol} ({id}) for {self.n_steps} steps...")

@@ -14,7 +14,7 @@ class CommManager:
         self.config = config
         self.client = IperfClient(config)
         self.server = IperfServer(config)
-        self.netlink_communicator = NetlinkCommunicator()
+        self.netlink_communicator = NetlinkCommunicator(config)
 
     def start_communication(self):
         self.netlink_communicator.init_kernel_communication()

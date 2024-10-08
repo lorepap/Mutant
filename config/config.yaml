@@ -5,11 +5,19 @@ rtt: 20
 bdp_mult: 2
 num_steps: 1000
 num_fields_kernel: 14
-reward:
-  zeta: 5
-  kappa: 2
+zeta: 5
+kappa: 2
 step_wait: 0.5
 pool_size: 4
+lr: 0.0001
+mpts_T: 100
+mpts_step_wait: 0.5
+steps_per_loop: 1
+seq_length: 5
+server_ip: 10.172.13.12
+server_port: 5201
+iperf_time: 86400
+log_mahimahi: true
 
 kernel_info:
   - now
@@ -61,7 +69,7 @@ protocols:
   veno: 4
   vegas: 5
   yeah: 6
-  bic: 8
-  htcp: 9
-  highspeed: 10
-  illinois: 11
+  bic: 7
+  htcp: 8
+  highspeed: 9
+  illinois: 10

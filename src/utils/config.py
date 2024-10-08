@@ -1,147 +1,110 @@
-# src/utils/config.py
 from src.utils.paths import ProjectPaths
+from src.utils.trace_manager import TraceManager
 import yaml
+from typing import Dict, Any
+import os
 
 class Config:
     def __init__(self, config_name: str):
-        self.paths = ProjectPaths()
-        config_path = self.paths.get_config_path(config_name)
+        self._paths = ProjectPaths()
+        self._trace_man = TraceManager(self._paths)
+        self._config = self._load_config(config_name)
+        self._derived_values: Dict[str, Any] = {}
+        self._add_directory_paths()
+        self._update_derived_values()
+
+    def _load_config(self, config_name: str) -> Dict[str, Any]:
+        config_path = self._paths.get_config_path(config_name)
         with open(config_path, 'r') as file:
-            config = yaml.safe_load(file)
-        self.__dict__.update(config)
+            return yaml.safe_load(file)
 
-        # Initialize params
-        self._bw = config.get('bw')
-        self._bw_factor = config.get('bw_factor')
-        self._rtt = config.get('rtt')
-        self._bdp_mult = config.get('bdp_mult')
-        self._num_steps = config.get('num_steps')
-        self._num_fields_kernel = config.get('num_fields_kernel')
-        self._reward = config.get('reward')
-        self._step_wait = config.get('step_wait')
-        self._pool_size = config.get('pool_size')
+    def __getattr__(self, name):
+        if name == 'paths':
+            return self._paths
+        if name == 'trace_man':
+            return self._trace_man
+        if name in self._config:
+            return self._config[name]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
-        self._update_derived_values()
 
-        self.mahimahi_dir = self.paths.MAHIMAHI_LOG_DIR
-        self.iperf_dir = self.paths.IPERF_LOG_DIR
-        self.collection_dir = self.paths.COLLECTION_LOG_DIR
+    def __setattr__(self, name, value):
+        if name in ['_paths', '_trace_man', '_config']:
+            super().__setattr__(name, value)
+        elif hasattr(self, '_config'):
+            # Add or update the attribute in _config
+            self._config[name] = value
+            self._update_derived_values()
+        else:
+            super().__setattr__(name, value)
 
-        # log booleans
-        self.log_mahimahi = True
-        self.log_iperf = True
-        
-        # connection params
-        self.server_port = 5201
-        self.server_ip = '10.172.13.12' # TODO: parametrize
-        self.iperf_time = 86400
-        self.train_features = self._get_train_features()
-
-        
-
-    @property
-    def bw(self):
-        return self._bw
-
-    @bw.setter
-    def bw(self, value):
-        self._bw = value
-        self._update_derived_values()
-
-    @property
-    def bw_factor(self):
-        return self._bw_factor
-
-    @bw_factor.setter
-    def bw_factor(self, value):
-        self._bw_factor = int(value)
-        self._update_derived_values()
-
-    @property
-    def rtt(self):
-        return self._rtt
-
-    @rtt.setter
-    def rtt(self, value):
-        self._rtt = value
-        self._update_derived_values()
-
-    @property
-    def bdp_mult(self):
-        return self._bdp_mult
-
-    @bdp_mult.setter
-    def bdp_mult(self, value):
-        self._bdp_mult = value
-        self._update_derived_values()
-
-    @property
-    def num_steps(self):
-        return self._num_steps
-
-    @num_steps.setter
-    def num_steps(self, value):
-        self._num_steps = value
-
-    @property
-    def num_fields_kernel(self):
-        return self._num_fields_kernel
-
-    @num_fields_kernel.setter
-    def num_fields_kernel(self, value):
-        self._num_fields_kernel = value
-
-    @property
-    def reward(self):
-        return self._reward
-
-    @reward.setter
-    def reward(self, value):
-        self._reward = value
-
-    @property
-    def step_wait(self):
-        return self._step_wait
-
-    @step_wait.setter
-    def step_wait(self, value):
-        self._step_wait = value
-
-    @property
-    def pool_size(self):
-        return self._pool_size
-
-    @pool_size.setter
-    def pool_size(self, value):
-        self._pool_size = value
+    def _add_directory_paths(self):
+        # Add all directory attributes from ProjectPaths to the config
+        for attr_name in dir(self._paths):
+            if attr_name.endswith('_DIR') and not attr_name.startswith('_'):
+                dir_path = getattr(self._paths, attr_name)
+                self._config[attr_name.lower()] = dir_path
+                # Create the directory if it doesn't exist
+                os.makedirs(dir_path, exist_ok=True)
 
     def _update_derived_values(self):
-        # Calculate q_size
-        bdp = self.bw * self.rtt  # Mbits
+        if all(key in self._config for key in ['bw', 'rtt', 'bdp_mult']):
+            self._config['q_size'] = self._calculate_q_size()
+            if 'trace_type' in self._config and self._config['trace_type'] == 'wired':
+                self._config['trace_d'], self._config['trace_u'] = self._get_traces()
+        
+        if all(key in self._config for key in ['trace_type', 'cellular_trace_name']) and self._config['trace_type'] == 'cellular':
+            self._config['trace_d'], self._config['trace_u'] = self._get_traces()
+        
+        if all(key in self._config for key in ['train_non_stat_features', 'train_stat_features', 'window_sizes', 'protocols']):
+            self._config['train_features'] = self._get_train_features()
+            self._config['log_train_features'] = ['step'] + self._config['train_features'] + ['reward']
+
+    def _calculate_q_size(self) -> int:
+        bdp = self._config['bw'] * self._config['rtt']  # Mbits
         mss = 1488  # bytes
-        self.q_size = int(self.bdp_mult * bdp * 10**3 / (8*mss))  # packets
+        return int(self._config['bdp_mult'] * bdp * 10**3 / (8*mss))  # packets
 
-        # Set trace files
-        if self.bw_factor == 1:
-            self.trace_d = f'wired{int(self.bw)}' # TODO: add trace type (e.g., 'wired', 'cellular')
-            self.trace_u = self.trace_d
+    def _get_traces(self):
+        trace_type = self._config.get('trace_type')
+        if trace_type == 'wired':
+            trace_d = self._trace_man.get_trace_name(trace_type, bw=self._config['bw'], bw_factor=self._config['bw_factor'], direction='down')
+            trace_u = self._trace_man.get_trace_name(trace_type, bw=self._config['bw'], bw_factor=self._config['bw_factor'], direction='up')
+        elif trace_type == 'cellular':
+            cellular_trace = self.trace_man.get_trace_name('cellular', name=self._config.get('cellular_trace_name'))
+            trace_d = trace_u = cellular_trace
         else:
-            self.trace_d = f'wired{int(self.bw)}-{int(self.bw_factor)}x-d'
-            self.trace_u = f'wired{int(self.bw)}-{int(self.bw_factor)}x-u'
+            if not trace_type:
+                raise ValueError("Trace type not provided")
+            else:
+                raise ValueError(f"Unknown trace type '{trace_type}'")
 
-    def get_trace_path(self, trace_name):
-        return str(self.paths.get_trace_path(trace_name))
+        if not self._trace_man.get_trace_path(trace_d):
+            raise ValueError(f"Downlink trace '{trace_d}' not found")
+        if not self._trace_man.get_trace_path(trace_u):
+            raise ValueError(f"Uplink trace '{trace_u}' not found")
 
-    def get_log_path(self, log_type, filename):
-        return str(self.paths.get_log_path(log_type, filename))
+        return trace_d, trace_u
 
     def _get_train_features(self):
-        train_features = []
-        train_features.extend(self.train_non_stat_features)
-        train_features.extend([feat for feat in self.train_stat_features if feat not in self.train_non_stat_features])
-        for stat_feature in self.train_stat_features:
-            for w_size in self.window_sizes:
-                train_features.extend([f"{stat_feature}_avg_{w_size}", f"{stat_feature}_min_{w_size}", f"{stat_feature}_max_{w_size}"])
-        # One hot encoding features. N_actions = 2**n_features, so n_features= log2(n_actions)
-        train_features.extend([f"arm_{i}" for i in range(len(self.protocols))])
-        return train_features
+        features = self._config.get('train_non_stat_features', []) + [
+            feat for feat in self._config.get('train_stat_features', [])
+            if feat not in self._config.get('train_non_stat_features', [])
+        ]
+        for stat_feature in self._config.get('train_stat_features', []):
+            for w_size in self._config.get('window_sizes', []):
+                features.extend([f"{stat_feature}_avg_{w_size}", f"{stat_feature}_min_{w_size}", f"{stat_feature}_max_{w_size}"])
+        features.extend([f"arm_{i}" for i in range(len(self._config.get('protocols', {})))])
+        return features
+
+    def get_trace_path(self, trace_name):
+        return self._trace_man.get_trace_path(trace_name)
+
+    def get_log_path(self, log_type, filename):
+        return str(self._paths.get_log_path(log_type, filename))
+
+    def get_id(self, protocol):
+        return self._config['protocols'][protocol]
+
+    def get_protocol_name(self, id):
+        return next(p for p, pid in self._config['protocols'].items() if pid == id)

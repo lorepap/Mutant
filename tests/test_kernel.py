@@ -14,7 +14,7 @@ def main():
     config = Config('config.yaml')
     client = IperfClient(config)
     server = IperfServer(config)
-    netlink_communicator = NetlinkCommunicator()
+    netlink_communicator = NetlinkCommunicator(config)
     kernel_thread = KernelRequest(config.num_fields_kernel, netlink_communicator)
     n_steps = 10
 

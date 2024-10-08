@@ -1,9 +1,9 @@
 # src/main.py
 
 import argparse
-from src.core.collector import Collector
-from src.core.comm_manager import CommManager
 from src.utils.config import Config
+from src.core.comm_manager import CommManager
+from src.core.collector import Collector
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Run collection with specified parameters")
@@ -19,9 +19,17 @@ def parse_arguments():
     parser.add_argument("--kappa", type=float, help="Kappa value for reward calculation")
     parser.add_argument("--step_wait", type=float, help="Wait time between steps")
     parser.add_argument("--pool_size", type=int, help="Pool size")
+    parser.add_argument("--trace_type", "-tr", type=str, help="Trace type (wired, cellular)", default="wired", choices=["wired", "cellular"])
+    parser.add_argument("--cellular_trace_name", "-c", type=str, help="Cellular trace name")
     return parser.parse_args()
 
 def update_config_from_args(config, args):
+    if args.trace_type is not None:
+        if args.cellular_trace_name is None and args.trace_type == "cellular":
+            raise ValueError("Cellular trace name must be provided for cellular traces")
+        config.trace_type = args.trace_type
+        config.cellular_trace_name = args.cellular_trace_name
+    
     if args.bw is not None:
         config.bw = args.bw
     if args.bw_factor is not None:

@@ -18,10 +18,6 @@ class DataPreprocessor:
         data: dict = self._add_statistic_features(data)
         data: dict = self._filter_only_train_features(data)
         data: dict = self._add_one_hot(data)
-        # self.feature_vector = np.array([val for feat, val in data.items() if feat in self.config.train_features])
-        # preprocessed_data = np.hstack((self.feature_vector, one_hot_proto_id))
-        # data = {feat: val for feat, val in data.items() if feat in self.config.train_features}
-        # preprocessed_data = {**data, **{f'arm_{i}': one_hot_proto_id[i] for i in range(len(one_hot_proto_id))}}
         return data
 
     def _add_statistic_features(self, data: Dict):
@@ -52,3 +48,15 @@ class DataPreprocessor:
     @property
     def features(self):
         return self.config.all_features
+    
+
+# class RLDataPreprocessor(DataPreprocessor):
+#     def __init__(self, config: Config):
+#         super().__init__(config)
+
+#     def preprocess(self, data: Dict) -> np.ndarray:
+#         data = self._add_statistic_features(data)
+#         data = self._filter_only_train_features(data)
+#         data = self._add_one_hot(data)
+#         return np.array([data[feature] for feature in self.config.train_features]), \
+#                 data

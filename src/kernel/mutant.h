@@ -24,11 +24,11 @@
 #define VENO 4
 #define VEGAS 5
 #define YEAH 6
-#define CDG  7
-#define BIC 8
-#define HTCP 9
-#define HIGHSPEED 10
-#define ILLINOIS 11
+#define BIC 7
+#define HTCP 8
+#define HIGHSPEED 9
+#define ILLINOIS 10
+#define CDG  11
 // #define PCC 12
 // #define BASE 13
 // #define BASE2 14

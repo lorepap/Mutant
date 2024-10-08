@@ -3,6 +3,7 @@ from pickle import TRUE
 import socket
 import struct
 import subprocess
+import time
 from src.utils.config import Config
 
 NETLINK_TEST = 25
@@ -14,8 +15,8 @@ PROJ_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 class NetlinkCommunicator():
     _socket_obj = None
 
-    def __init__(self):
-        self.config = Config('config.yaml')
+    def __init__(self, config: Config):
+        self.config = config
         self._init_proto()
         self.socket = self.create_socket()
         self.socket.setblocking(False)
@@ -40,6 +41,16 @@ class NetlinkCommunicator():
         subprocess.call(cmd1)
         subprocess.call(cmd2)
         print("Kernel module set up")
+
+    def initialize_protocols(self):
+        print("Initializing protocols...")
+        for p, id in self.config.protocols.items():
+            print(f"Initializing protocol: {p} ({id})")
+            start = time.time()
+            while time.time() - start < 0.5:
+                msg = self.create_netlink_msg(
+                    'SENDING ACTION', msg_flags=SET_PROTO_FLAG, msg_seq=int(id))
+                self.send_msg(msg)
 
     def change_cca(self, protocol):
         msg = self.create_netlink_msg(

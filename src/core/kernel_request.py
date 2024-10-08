@@ -12,6 +12,7 @@ class KernelRequest(threading.Thread):
         self.queue = queue.Queue()
         self._stop_event = threading.Event()
         self.comm = comm
+        self._enabled = False
 
     def run(self):
         while not self._stop_event.is_set():
