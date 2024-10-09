@@ -23,6 +23,18 @@ class WiredTraceManager(BaseTraceManager):
             return f'wired{int(bw)}-{int(bw_factor)}x-{dir_suffix}'
 
 class CellularTraceManager(BaseTraceManager):
+    def __init__(self, paths: ProjectPaths):
+        super().__init__(paths)
+        self.cellular_traces = [
+            "5GBeachStationary.csv",
+            "5GBeachStationary2.csv",
+            "5GBeachStationary3.csv",
+            "5GCityDrive.csv",
+            "5GCorniche.csv",
+            "5GCornicheWalking.csv",
+            "5GParkStationary1.csv",
+            "5GParkStationary2.csv",
+        ]
     def get_trace_name(self, name):
         switcher = {
             "beach-stationary": "5GBeachStationary.csv",

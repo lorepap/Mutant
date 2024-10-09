@@ -1,5 +1,9 @@
 # src/core/kernel_request.py
 
+"""
+TODO: replace the queue with a ring buffer
+"""
+
 import queue
 import threading
 import select
@@ -23,7 +27,7 @@ class KernelRequest(threading.Thread):
                     break
                 
                 # Use select with a timeout to implement a timer
-                readable, _, _ = select.select([self.comm.socket], [], [], 10) 
+                readable, _, _ = select.select([self.comm.socket], [], [], 20) 
 
                 if not readable:
                     # No data received within the timeout period

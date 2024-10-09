@@ -29,10 +29,22 @@ class MahimahiIperfClient:
     def run(self):
         # Construct the iperf3 command
         iperf_cmd = f"./iperf.sh"
-        
+        trace_path = '5GBeachStationary_new_format.csv'
+        print(trace_path)
         # Wrap the iperf3 command with mahimahi mm-delay
-        cmd = f"mm-delay {self.delay} {iperf_cmd}"
-        
+        # cmd = f"mm-delay {self.delay} {iperf_cmd}"
+        cmd = [
+            'mm-delay', str(self.delay),
+            'mm-link',
+            trace_path,
+            trace_path,
+            # '--uplink-queue=droptail',
+            # f'--uplink-queue-args=packets=20',
+            # '--downlink-queue=droptail',
+            # f'--downlink-queue-args=packets=20'
+        ]
+        cmd = ' '.join(cmd) + f" {iperf_cmd}"
+
         # Run the command using shell=True to properly handle the mahimahi piping
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         stdout, stderr = process.communicate()

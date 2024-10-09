@@ -20,7 +20,7 @@ class NetlinkCommunicator():
         self._init_proto()
         self.socket = self.create_socket()
         self.socket.setblocking(False)
-        self.set_socket_buffer_size()
+        self.set_socket_buffer_size(recv_size=262144, send_size=262144) # 256KB
         self.set_protocol(self.config.protocols['cubic']) # set initial protocol
     
     @classmethod
