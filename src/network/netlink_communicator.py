@@ -44,8 +44,9 @@ class NetlinkCommunicator():
 
     def initialize_protocols(self):
         print("Initializing protocols...")
-        for p, id in self.config.protocols.items():
-            print(f"Initializing protocol: {p} ({id})")
+        protocols = self.config.pool if self.config.pool else self.config.protocols.values()
+        for id in protocols:
+            print(f"Initializing protocol: {id}")
             start = time.time()
             while time.time() - start < 0.5:
                 msg = self.create_netlink_msg(

@@ -8,6 +8,7 @@ class EncoderNetwork(network.Network):
             state_spec=(),
             name=name)
         self.encoding_dim = 16
+        
         # self._encoder = tf.keras.models.Sequential([
         #     tf.keras.layers.Dense(input_tensor_spec.shape[0], activation='relu'),
         #     tf.keras.layers.Reshape((1, input_tensor_spec.shape[0])),

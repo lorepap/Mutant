@@ -27,7 +27,6 @@ class Config:
             return self._config[name]
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
-
     def __setattr__(self, name, value):
         if name in ['_paths', '_trace_man', '_config']:
             super().__setattr__(name, value)

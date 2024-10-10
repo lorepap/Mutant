@@ -9,6 +9,8 @@ from src.core.runner import RLRunner
 from src.core.comm_manager import CommManager
 from src.core.kernel_request import KernelRequest
 from src.utils.config import Config
+from src.utils.paths import ProjectPaths
+from src.utils.trace_manager import CellularTraceManager
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Run collection with specified parameters")
@@ -25,7 +27,7 @@ def parse_arguments():
     parser.add_argument("--step_wait", type=float, help="Wait time between steps")
     parser.add_argument("--pool_size", type=int, help="Pool size")
     parser.add_argument("--trace_name", type=str, help="Trace name")
-    parser.add_argument("--trace_type", type=str, help="Trace type", default='cellular')
+    parser.add_argument("--trace_type", type=str, help="Trace type")
     return parser.parse_args()
 
 def update_config_from_args(config, args):
@@ -58,6 +60,7 @@ def update_config_from_args(config, args):
         config.step_wait = args.step_wait
     if args.pool_size is not None:
         config.pool_size = args.pool_size
+    config.model_name = f"{config.trace_type}_{config.cellular_trace_name}_{config.rtt}_k_{config.pool_size}"
 
 def setup_environment(config, kernel_thread):
     observation_spec = tensor_spec.TensorSpec(
@@ -77,7 +80,7 @@ def setup_environment(config, kernel_thread):
 
 def mpts_most_selected(config: Config, file_path: str, k: int = 4):
     try:
-        with open(file_path, 'r') as f:
+        with open(f'{file_path}.json', 'r') as f:
             most_selected_arms = json.load(f)
         
         # Ensure we don't try to select more arms than available
@@ -87,7 +90,7 @@ def mpts_most_selected(config: Config, file_path: str, k: int = 4):
         top_k_arms = most_selected_arms[:k]
         
         # Map arm indices to protocol names
-        selected_protocols = [config.protocols[arm] for arm, _ in top_k_arms]
+        selected_protocols = [arm for arm, _ in top_k_arms]
         
         print(f"Top {k} selected protocols: {selected_protocols}")
         return selected_protocols
@@ -102,12 +105,13 @@ def mpts_most_selected(config: Config, file_path: str, k: int = 4):
         return []
 
 def main():
-    args = parse_arguments()
+
     config = Config('config.yaml')
+    args = parse_arguments()
     update_config_from_args(config, args)
     comm_manager = CommManager(config)
     kernel_request = KernelRequest(config.num_fields_kernel, comm_manager.netlink_communicator) # we can just setup a universe with all instantiated object
-    pool = mpts_most_selected(f'most_selected_arms_{config.trace_d}')
+    pool = mpts_most_selected(config, f'most_selected_arms_{args.trace_name}', config.k)
     config.pool = pool
     env = setup_environment(config, kernel_request)
     runner = RLRunner(config, env)

@@ -75,28 +75,28 @@ class Trainer:
         self.obs_size = len(self.config.train_non_stat_features) + len(self.config.train_stat_features)*3*3 + len(self.config.protocols)
         self.reward_calculator = AdaptiveRewardCalculator(self.config)
         self.encoding_dim = 16
-        self.model = self.build_model()
+        self.encoder, self.model = self.build_model()
         self.scaler = MinMaxScaler()
 
     def build_model(self):
-        encoding_net = tf.keras.models.Sequential([
+        encoder = tf.keras.models.Sequential([
             tf.keras.layers.Dense(self.obs_size, activation='relu'),
             tf.keras.layers.Reshape((1, self.obs_size)),
-            tf.keras.layers.GRU(32, return_sequences=True),
+            tf.keras.layers.GRU(32, return_sequences=False),
             tf.keras.layers.Dense(self.encoding_dim, activation='relu')
         ])
 
         reward_predictor = tf.keras.layers.Dense(1)
 
         combined_model = tf.keras.models.Sequential([
-            encoding_net,
+            encoder,
             reward_predictor
         ])
 
         optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
         combined_model.compile(optimizer=optimizer, loss='mse')
         combined_model.build(input_shape=(None, self.obs_size))
-        return combined_model
+        return encoder, combined_model
 
     def normalize_data(self, df: pd.DataFrame):
         # Separate features and target
@@ -145,12 +145,12 @@ class Trainer:
         print(f"Model trained for {len(history.history['loss'])} epochs on {file_path}")
 
     def save_weights(self, file_name='encoder_weights_5G.h5'):
-        self.model.save_weights(file_name)
+        self.encoder.save_weights(file_name)
         print(f"Model weights saved to {file_name}")
 
     def load_weights(self, file_name='encoder_weights_5G.h5'):
         if os.path.exists(file_name):
-            self.model.load_weights(file_name)
+            self.encoder.load_weights(file_name)
             print(f"Model weights loaded from {file_name}")
         else:
             print(f"No weights file found at {file_name}. Starting with fresh weights.")

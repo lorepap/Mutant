@@ -17,6 +17,7 @@ from src.network.netlink_communicator import NetlinkCommunicator
 from src.utils.change_detection import ADWIN
 from src.network.netlink_communicator import SET_PROTO_FLAG
 from src.utils.data_preprocessor import DataPreprocessor
+from src.core.normalizer import OnlineMinMaxScaler
 
 from collections import deque
 
@@ -30,10 +31,11 @@ class MabEnvironment(bandit_py_environment.BanditPyEnvironment):
         self.kernel_thread = kernel_thread
         self._action_spec = action_spec
         self._batch_size = batch_size
-        self.n_actions = int(self._action_spec.maximum+1)
+        self.n_actions = int(self._action_spec.maximum+1)   
+        self.scaler = OnlineMinMaxScaler(len(self.config.train_features))
 
         # Logger
-        self.logger = Logger(self.config, log_dir=self.config.run_log_dir) # TODO check if we want to keep run_log_dir as the default
+        self.logger = Logger(self.config, log_dir=self.config.run_dir) # TODO check if we want to keep run_log_dir as the default
         self.logger.features = self.config.log_train_features # with epoch, step and reward (for logging and post-training analysis)
         # Load the configuration
         # self.proto_config = utils.parse_protocols_config()
@@ -75,6 +77,7 @@ class MabEnvironment(bandit_py_environment.BanditPyEnvironment):
 
         # Netlink communicator
         self.netlink_communicator = NetlinkCommunicator(config)
+        self.netlink_communicator.initialize_protocols()
 
         # For the logger (The runner should invoke set_logger() to enable logging)
         # self.logger = None
@@ -115,7 +118,7 @@ class MabEnvironment(bandit_py_environment.BanditPyEnvironment):
 
     def _observe(self, step_wait=None):
         s_tmp = np.array([])
-        _log_tmp = []
+        s_tmp_log = np.array([])
 
         # Callbacks data
         self.features = []
@@ -135,8 +138,9 @@ class MabEnvironment(bandit_py_environment.BanditPyEnvironment):
             crt_proto_id = data[self.config.kernel_info.index('crt_proto_id')]
             processed_data = self._process_raw_data(data)
             if processed_data is None:
+                start = time.time()
                 continue
-            _log_tmp.append(processed_data)
+
             self._thr_history.append(processed_data['thruput'])
             self._rtt_history.append(processed_data['rtt'])
 
@@ -145,21 +149,27 @@ class MabEnvironment(bandit_py_environment.BanditPyEnvironment):
             # Throughput history is cleared when a change in the network is detected -> new max reward is computed in apply_action()
             # We have to select all the actions to get the maximum throughput achievable (bandwidth estimation) and set the new max for the "new" network scenario
             if self.detectors:
-                self.detectors[self._inv_map_actions[crt_proto_id]] \
+                self.detectors[self._inv_map_actions[int(crt_proto_id)]] \
                     .add_element(processed_data['thruput'])
 
             feat_vector = np.array([processed_data[feature] for feature in self.config.train_features])
+            self.scaler.update(feat_vector.copy())
+
+            normalized_vector = self.scaler.scale(feat_vector.copy())
+
             if s_tmp.size == 0:
-                s_tmp = np.array(feat_vector).reshape(1, -1)
+                s_tmp = normalized_vector.reshape(1, -1)
+                s_tmp_log = feat_vector.reshape(1, -1)
             else:
-                s_tmp = np.vstack((s_tmp, np.array(feat_vector).reshape(1, -1)))
+                s_tmp = np.vstack((s_tmp, normalized_vector.reshape(1, -1)))
+                s_tmp_log = np.vstack((s_tmp_log, feat_vector.reshape(1, -1)))
 
         self.kernel_thread.disable()
 
         # Observation as a mean of the samples
         # Check if the crt_proto_id is the same for all the samples (it must be, otherwise is an error))
         # print("[DEBUG] Current proto id", self.log_values[0][7])
-        self.log_values = np.mean(s_tmp, axis=0).reshape(1, -1)
+        self.log_values = np.mean(s_tmp_log, axis=0).reshape(1, -1)
         # crt_proto_id_idx = self.non_stat_features.index('crt_proto_id')
         # self.log_values[0][crt_proto_id_idx] = int(collected_data['crt_proto_id'])
 
@@ -213,7 +223,7 @@ class MabEnvironment(bandit_py_environment.BanditPyEnvironment):
 
         # Compute the reward given the mean of the collected samples as the observation (shape: (1, num_features))
         # data = {name: value for name, value in zip(self.training_features, self._observation[0])}
-        data = dict(zip(self.training_features, self._observation[0])) # TODO: check, potential bug (observation is a ndarray)
+        data = dict(zip(self.training_features, self.log_values[0])) # TODO: check, potential bug (observation is a ndarray)
         
         # Compute the reward. Absolute value of the reward is kept for logging.
         # reward = self._compute_reward(data['thruput'], data['loss_rate'], data['rtt'])
@@ -231,7 +241,10 @@ class MabEnvironment(bandit_py_environment.BanditPyEnvironment):
                 max_thr = max(self._thr_history)
                 min_rtt = min(self._rtt_history)
             self._max_rw = self._compute_reward(max_thr, 0, min_rtt)
-            reward = reward/self._max_rw
+            if self._max_rw > 0:
+                reward = reward/self._max_rw
+            else:
+                reward = 0
 
         reward = np.array(reward).reshape(self.batch_size)
         
