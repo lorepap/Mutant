@@ -14,12 +14,25 @@ def run_trace(trace_name):
     logging.info(f"Running command: {command}")
     
     try:
-        result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
-        logging.info(f"Command for trace {trace_name} completed successfully")
-        logging.debug(f"Output: {result.stdout}")
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Command for trace {trace_name} failed with error code {e.returncode}")
-        logging.error(f"Error output: {e.stderr}")
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, universal_newlines=True)
+        
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                print(output.strip())
+                logging.info(output.strip())
+        
+        rc = process.poll()
+        
+        if rc != 0:
+            error_output = process.stderr.read()
+            logging.error(f"Command for trace {trace_name} failed with error code {rc}")
+            logging.error(f"Error output: {error_output}")
+        else:
+            logging.info(f"Command for trace {trace_name} completed successfully")
+    
     except Exception as e:
         logging.error(f"An unexpected error occurred while running trace {trace_name}: {str(e)}")
 
