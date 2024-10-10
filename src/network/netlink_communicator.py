@@ -19,7 +19,6 @@ class NetlinkCommunicator():
         self.config = config
         self._init_proto()
         self.socket = self.create_socket()
-        self.socket.setblocking(False)
         self.set_socket_buffer_size(recv_size=262144, send_size=262144) # 256KB
         self.set_protocol(self.config.protocols['cubic']) # set initial protocol
     
@@ -28,6 +27,7 @@ class NetlinkCommunicator():
         print("Creating netlink socket to communicate with the kernel...")
         if cls._socket_obj is None:
             s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, NETLINK_TEST)
+            s.setblocking(False)
             s.bind((os.getpid(), 0))
             cls._socket_obj = s
         return cls._socket_obj

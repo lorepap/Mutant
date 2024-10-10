@@ -15,6 +15,8 @@ class BaseTraceManager(ABC):
         return str(self.paths.get_trace_path(trace_name))
 
 class WiredTraceManager(BaseTraceManager):
+    def __init__(self, paths: ProjectPaths):
+        super().__init__(paths)
     def get_trace_name(self, bw, bw_factor, direction):
         if bw_factor == 1:
             return f'wired{int(bw)}'
@@ -35,18 +37,18 @@ class CellularTraceManager(BaseTraceManager):
             "5GParkStationary1.csv",
             "5GParkStationary2.csv",
         ]
+        self.cellular_names = [
+            "beach-stationary",
+            "beach-stationary2",
+            "beach-stationary3",
+            "city-drive",
+            "corniche",
+            "corniche-walking",
+            "park-stationary1",
+            "park-stationary2",
+        ]
     def get_trace_name(self, name):
-        switcher = {
-            "beach-stationary": "5GBeachStationary.csv",
-            "beach-stationary2": "5GBeachStationary2.csv",
-            "beach-stationary3": "5GBeachStationary3.csv",
-            "city-drive": "5GCityDrive.csv",
-            "corniche": "5GCorniche.csv",
-            "corniche-walking": "5GCornicheWalking.csv",
-            "park-stationary1": "5GParkStationary1.csv",
-            "park-stationary2": "5GParkStationary2.csv",
-        }
-        return switcher.get(name, name)
+        return self.cellular_traces[self.cellular_names.index(name)]
 
 class TraceManager:
     def __init__(self, paths: ProjectPaths):

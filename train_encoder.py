@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 import pandas as pd
 from tqdm import tqdm
+from sklearn.preprocessing import MinMaxScaler
 from src.utils.config import Config
 from src.utils.change_detection import ADWIN
 
@@ -71,43 +72,21 @@ class AdaptiveRewardCalculator:
 class Trainer:
     def __init__(self):
         self.config = Config('config.yaml')
-        self.obs_size = len(self.config.train_non_stat_features) + len(self.config.train_stat_features)*3*3 + len(self.config.protocols) # self.config.train_features
-        self.dataset = None
+        self.obs_size = len(self.config.train_non_stat_features) + len(self.config.train_stat_features)*3*3 + len(self.config.protocols)
         self.reward_calculator = AdaptiveRewardCalculator(self.config)
+        self.encoding_dim = 16
+        self.model = self.build_model()
+        self.scaler = MinMaxScaler()
 
-    def process_file(self, file_path):
-        df = pd.read_csv(file_path)[:1000]
-        return self.reward_calculator.process_dataframe(df)
-
-    def build_dataset(self):
-        datasets = []
-        for f in tqdm(os.listdir(self.config.collection_dir)):
-            if f.endswith('.csv'):
-                print(f"Processing file {f}...")
-                file_path = os.path.join(self.config.collection_dir, f)
-                datasets.append(self.process_file(file_path))
-        
-        print("Finished processing the dataset")
-        self.dataset = pd.concat(datasets, ignore_index=True)
-        output_file = 'collection_dataset.csv'
-        self.dataset.to_csv(output_file, index=False)
-        print(f"Dataset shape: {self.dataset.shape}")
-        print(f"Dataset columns: {self.dataset.columns}")
-        print(f"Dataset head:\n{self.dataset.head()}")
-
-    def run(self):
-        encoding_dim = 16
+    def build_model(self):
         encoding_net = tf.keras.models.Sequential([
             tf.keras.layers.Dense(self.obs_size, activation='relu'),
             tf.keras.layers.Reshape((1, self.obs_size)),
             tf.keras.layers.GRU(32, return_sequences=True),
-            tf.keras.layers.Dense(encoding_dim, activation='relu')
+            tf.keras.layers.Dense(self.encoding_dim, activation='relu')
         ])
 
         reward_predictor = tf.keras.layers.Dense(1)
-
-        _observation = self.dataset.drop(['normalized_reward'], axis=1)
-        norm_rw = self.dataset['normalized_reward']
 
         combined_model = tf.keras.models.Sequential([
             encoding_net,
@@ -117,36 +96,81 @@ class Trainer:
         optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
         combined_model.compile(optimizer=optimizer, loss='mse')
         combined_model.build(input_shape=(None, self.obs_size))
-        combined_model.summary()
+        return combined_model
 
-        # Add early stopping callback
+    def normalize_data(self, df: pd.DataFrame):
+        # Separate features and target
+        features = df.drop(['normalized_reward'], axis=1)
+        target = df['normalized_reward']
+
+        # Fit the scaler on the features and transform
+        normalized_features = self.scaler.fit_transform(features)
+
+        # Create a new dataframe with normalized features
+        normalized_df = pd.DataFrame(normalized_features, columns=features.columns)
+
+        # Add back the target column
+        normalized_df['normalized_reward'] = target
+
+        return normalized_df
+
+
+    def process_file(self, file_path):
+        df = pd.read_csv(file_path)[:1000]
+        df = self.reward_calculator.process_dataframe(df)
+        return self.normalize_data(df)
+
+    def train_on_trace(self, file_path):
+        print(f"Processing and training on file: {file_path}")
+        df = self.process_file(file_path)
+        
+        _observation = df.drop(['normalized_reward'], axis=1)
+        norm_rw = df['normalized_reward']
+
         early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
             patience=10,
             restore_best_weights=True
         )
 
-        # Train the combined model (encoder and reward predictor) with early stopping
-        history = combined_model.fit(
+        history = self.model.fit(
             _observation, 
             norm_rw, 
-            epochs=10, 
+            epochs=50, 
             batch_size=32, 
             validation_split=0.2,
             callbacks=[early_stopping]
         )
 
-        # Extract and save the encoder model
-        encoder_model = tf.keras.models.Sequential(encoding_net.layers)
-        encoder_model.build(input_shape=(None, self.obs_size))
-        encoder_model.summary()
+        print(f"Model trained for {len(history.history['loss'])} epochs on {file_path}")
 
-        # Save the weights of the encoder model
-        encoder_model.save_weights('encoder_weights.h5')
-        
-        print(f"Model trained for {len(history.history['loss'])} epochs")
+    def save_weights(self, file_name='encoder_weights_5G.h5'):
+        self.model.save_weights(file_name)
+        print(f"Model weights saved to {file_name}")
+
+    def load_weights(self, file_name='encoder_weights_5G.h5'):
+        if os.path.exists(file_name):
+            self.model.load_weights(file_name)
+            print(f"Model weights loaded from {file_name}")
+        else:
+            print(f"No weights file found at {file_name}. Starting with fresh weights.")
+
+def main():
+    trainer = Trainer()
+    
+    for f in tqdm(os.listdir(trainer.config.collection_dir)):
+        if f.endswith('.csv'):
+            file_path = os.path.join(trainer.config.collection_dir, f)
+            print(f"Training on trace: {file_path}")
+            
+            # Load weights from previous trace (if exists)
+            trainer.load_weights()
+            
+            # Train on current trace
+            trainer.train_on_trace(file_path)
+            
+            # Save weights after training on this trace
+            trainer.save_weights()
 
 if __name__ == '__main__':
-    trainer = Trainer()
-    trainer.build_dataset()
-    trainer.run()
+    main()

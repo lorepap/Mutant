@@ -1,6 +1,7 @@
 # src/main.py
 
 import argparse
+import json
 import tensorflow as tf
 from tf_agents.specs import tensor_spec
 from src.core.environment import MabEnvironment
@@ -23,9 +24,15 @@ def parse_arguments():
     parser.add_argument("--kappa", type=float, help="Kappa value for reward calculation")
     parser.add_argument("--step_wait", type=float, help="Wait time between steps")
     parser.add_argument("--pool_size", type=int, help="Pool size")
+    parser.add_argument("--trace_name", type=str, help="Trace name")
+    parser.add_argument("--trace_type", type=str, help="Trace type", default='cellular')
     return parser.parse_args()
 
 def update_config_from_args(config, args):
+    if args.trace_type is not None:
+        config.trace_type = args.trace_type
+    if args.trace_name is not None:
+        config.cellular_trace_name = args.trace_name
     if args.bw is not None:
         config.bw = args.bw
     if args.bw_factor is not None:
@@ -68,13 +75,39 @@ def setup_environment(config, kernel_thread):
     )
     return environment
 
+def mpts_most_selected(config: Config, file_path: str, k: int = 4):
+    try:
+        with open(file_path, 'r') as f:
+            most_selected_arms = json.load(f)
+        
+        # Ensure we don't try to select more arms than available
+        k = min(k, len(most_selected_arms))
+        
+        # Get the K most selected arms
+        top_k_arms = most_selected_arms[:k]
+        
+        # Map arm indices to protocol names
+        selected_protocols = [config.protocols[arm] for arm, _ in top_k_arms]
+        
+        print(f"Top {k} selected protocols: {selected_protocols}")
+        return selected_protocols
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found.")
+        return []
+    except json.JSONDecodeError:
+        print(f"Error: Unable to parse JSON from file '{file_path}'.")
+        return []
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return []
+
 def main():
     args = parse_arguments()
     config = Config('config.yaml')
     update_config_from_args(config, args)
     comm_manager = CommManager(config)
     kernel_request = KernelRequest(config.num_fields_kernel, comm_manager.netlink_communicator) # we can just setup a universe with all instantiated object
-    pool = [0, 1, 2, 3] # debug
+    pool = mpts_most_selected(f'most_selected_arms_{config.trace_d}')
     config.pool = pool
     env = setup_environment(config, kernel_request)
     runner = RLRunner(config, env)

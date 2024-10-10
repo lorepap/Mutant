@@ -4,9 +4,12 @@ from src.network.netlink_communicator import NetlinkCommunicator
 import time
 import random 
 from tqdm import tqdm
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
+from src.utils.config import Config
 
 class MPTS:
-    def __init__(self, arms: dict, k: int, T: int, step_wait: float, thread: KernelRequest, net_channel: NetlinkCommunicator):
+    def __init__(self, config: Config, map_proto: dict, thread: KernelRequest, net_channel: NetlinkCommunicator):
         """
         Initializes the MPTS algorithm.
 
@@ -15,17 +18,21 @@ class MPTS:
             k: The desired number of top arms to select.
             T: The total budget (number of rounds).
         """
-        self.arms = arms # mapping arms -> protocol id
-        self.k = k
-        if k > len(arms):
+        self.config = config
+        self.arms = map_proto # mapping arms -> protocol id
+        self.k = config.k
+        if self.k > len(self.arms):
             raise ValueError("k cannot be greater than the number of arms.")
-        self.T = T
+        self.T = config.T
         self.k_thread = thread # Thread to communicate with the kernel
         self.net_channel = net_channel
-        self.proto_config = utils.parse_protocols_config() # for debug (protocol names)
-        self.proto_names = {int(self.proto_config[p]['id']): p for p in self.proto_config.keys()}
-        self.step_wait = step_wait # seconds
+        self.protocols = config.protocols  
+        self.step_wait = config.step_wait # seconds
+        self.scaler = MinMaxScaler()
         # print("MPTS initialized with arms: ", self.arms, " k: ", self.k, " T: ", self.T, " step_wait: ", self.step_wait, " proto_names: ", self.proto_names)
+
+    def get_proto_name(self, id):
+            return {int(self.protocols[p]): p for p in self.protocols.keys()}[id]
 
     def compute_reward(self, kappa, zeta, thr, loss_rate, rtt):
         # Reward is normalized if the normalize_rw is true, otherwise max_rw = 1
@@ -37,15 +44,14 @@ class MPTS:
         self.k_thread.enable()
         start = time.time()
         # while time.time() - start < self.step_wait:
-        while len(obs_list) < 10: # 5 samples
+        while len(obs_list) < self.config.no_samples_mpts: # no. samples to collect for each protocol
             obs = self.k_thread.read_data()
             obs_list.append(obs)
         self.k_thread.disable()
         self.k_thread.flush()
         # Average
         obs = np.mean(obs_list, axis=0)
-        feature_settings = utils.parse_features_config()
-        feature_names = feature_settings['kernel_info'] # List of features
+        feature_names = self.config.kernel_info
         data = {feature: obs[i] for i, feature in enumerate(feature_names)}
         thr = data['thruput']*10**-6 # bps to Mbps
         loss_rate = data['loss_rate']*10**-2 # % to fraction
@@ -77,8 +83,7 @@ class MPTS:
         n = len(self.arms)
         accepted = []  # Stores accepted arms
         active_arms = list(range(n))  # Indices of active arms
-        k_remaining = self.k  
-
+        k_remaining = self.k 
         # Phases of the algorithm
         print("Running MPTS algorithm...")
         for j in tqdm(range(n - 1)):

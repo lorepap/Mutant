@@ -21,7 +21,7 @@ class RLRunner:
     def __init__(self, config: Config, environment: MabEnvironment):
         self.config = config
         self.encoder = Encoder(config)
-        self.encoder.load_weights()
+        self.encoder.load_weights('encoder_weights_5G.h5')
         self.environment = environment
         # self.environment.set_initial_protocol() # It can be set from the environment!
         # time.sleep(1)

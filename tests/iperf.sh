@@ -2,7 +2,7 @@
 
 # Default values
 SERVER_IP="10.172.13.12"
-DURATION=10
+DURATION=30
 PORT=5201
 OUTPUT_FILE="test.json"
 

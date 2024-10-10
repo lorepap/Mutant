@@ -12,12 +12,11 @@ class IperfClient(threading.Thread):
         super().__init__()
         self.config = config
         self.process = None
-        self._tag = f'{self.config.trace_u}-{self.config.bw}-{self.config.rtt}-{self.config.q_size}-{self.config.bw_factor}x'
+        self._tag = f'{self.config.trace_d}-{self.config.bw}-{self.config.rtt}-{self.config.q_size}-{self.config.bw_factor}x'
         self._up_log_file = f'uplink-{self._tag}.log'
         self._down_log_file = f'downlink-{self._tag}.log'
         self._client_log_file = f'iperf_client-{self._tag}.log'
         self._setup_logging()
-
 
     def _setup_logging(self):
         log_dir = os.path.join(self.config.iperf_dir, 'iperf_client')
@@ -56,7 +55,6 @@ class IperfClient(threading.Thread):
         # self.process.wait()
 
     def _build_command(self):
-        
         iperf_script_path = self._generate_iperf_script()
 
         mahimahi_cmd = [
@@ -115,22 +113,34 @@ class IperfClient(threading.Thread):
             --logfile "{os.path.join(self.config.iperf_dir, f'{self._tag}.txt')}"
         """
                 
-        # Create a temporary file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sh') as temp_file:
-            temp_file.write(script_content)
-            temp_file_path = temp_file.name
+        # # Create a temporary file
+        # with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sh') as temp_file:
+        #     temp_file.write(script_content)
+        #     temp_file_path = temp_file.name
+
+         # Create a temporary file
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sh')
+        temp_file.write(script_content)
+        temp_file.close()
+        self._temp_script_path = temp_file.name
 
         # Make the script executable
-        os.chmod(temp_file_path, 0o755)
+        os.chmod(self._temp_script_path, 0o755)
 
-        return temp_file_path
+        return self._temp_script_path
 
     def stop(self):
         if self.process:
             self.process.terminate()
     
-    def __del__(self):
-        # Clean up the temporary script file
-        script_path = self._build_command()[-1]
-        if os.path.exists(script_path):
-            os.unlink(script_path)
+    # def cleanup(self):
+    #     # Clean up the temporary script file
+    #     if self._temp_script_path and os.path.exists(self._temp_script_path):
+    #         try:
+    #             os.unlink(self._temp_script_path)
+    #             self.logger.info(f"Temporary script file {self._temp_script_path} has been removed.")
+    #         except Exception as e:
+    #             self.logger.error(f"Failed to remove temporary script file {self._temp_script_path}: {e}")
+
+    # def __del__(self):
+    #     self.cleanup()

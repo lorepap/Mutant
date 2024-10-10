@@ -1,0 +1,183 @@
+#!/usr/bin/perl -w
+
+use warnings;
+use strict;
+use POSIX;
+
+sub usage
+{
+  die qq{Usage: $0 MS_PER_BIN [filename]\n};
+}
+
+if ( scalar @ARGV < 1 or scalar @ARGV > 2 ) {
+  usage;
+}
+
+my $MS_PER_BIN = shift;
+
+if ( $MS_PER_BIN !~ m{^\d+$} ) {
+  usage;
+}
+
+# Declare all global variables
+my $base_timestamp;
+my $first_timestamp;
+my $last_timestamp;
+my %capacity;
+my %arrivals;
+my %departures;
+my $capacity_sum = 0;
+my $arrival_sum = 0;
+my $departure_sum = 0;
+my @delays;
+my %signal_delay;
+
+sub ms_to_bin {
+  return int( $_[0] / $MS_PER_BIN );
+}
+
+sub bin_to_seconds {
+  return sprintf q{%.3f}, $_[0] * $MS_PER_BIN / 1000.0;
+}
+
+LINE: while ( <> ) {
+  chomp;
+
+  if ( m{^# base timestamp: (\d+)} ) {
+    if ( defined $base_timestamp ) {
+      die "base timestamp multiply defined";
+    } else {
+      $base_timestamp = $1;
+    }
+    next LINE;
+  } elsif ( m{^#} ) {
+    next LINE;
+  }
+
+  # parse and validate line
+  my ($timestamp, $event_type, $data) = split /\s+/, $_, 3;
+
+  if ( not defined $data ) {
+    die q{Format: timestamp event_type data};
+  }
+
+  if ( $timestamp !~ m{^\d+$} ) {
+    die qq{Invalid timestamp: $timestamp};
+  }
+
+  if ( not defined $base_timestamp ) {
+    die "logfile is missing base timestamp";
+  }
+
+  $timestamp -= $base_timestamp; # correct for startup time variation
+  if ( $timestamp > 0 ) {
+    if ( not defined $last_timestamp ) {
+      $last_timestamp = $first_timestamp = $timestamp;
+    }
+
+    $last_timestamp = max( $timestamp, $last_timestamp );
+
+    my ($num_bytes, $queue_size) = split /~/, $data;
+    $num_bytes =~ s/[^\d.]//g;  # Remove any non-digit characters
+    $num_bytes = int($num_bytes);  # Convert to integer
+
+    my $num_bits = $num_bytes * 8;
+    my $bin = ms_to_bin( $timestamp );
+
+    # process the event
+    if ( $event_type eq q{+} ) {
+      $arrivals{ $bin } += $num_bits;
+      $arrival_sum += $num_bits;
+    } elsif ( $event_type eq q{d} ) {
+      ; # nothing for now! We have drop!
+    } elsif ( $event_type eq q{#} ) {
+      $capacity{ $bin } += $num_bits;
+      $capacity_sum += $num_bits;
+    } elsif ( $event_type eq q{-} ) {
+      my ($bytes, $delay, $queue) = split /[\s~]/, $data;
+      $bytes =~ s/[^\d.]//g;  # Remove any non-digit characters
+      $num_bits = int($bytes) * 8;
+      $departures{ $bin } += $num_bits;
+
+      if ( $delay !~ /^\d+$/ ) {
+        die qq{Invalid delay: $delay};
+      }
+
+      if ( $timestamp - $delay < 0 ) {
+        die qq{Invalid timestamp and delay: ts=$timestamp, delay=$delay};
+      }
+
+      push @delays, $delay;
+      $departure_sum += $num_bits;
+
+      $signal_delay{ $timestamp - $delay } = min( $delay,
+                          (defined $signal_delay{ $timestamp - $delay })
+                          ? $signal_delay{ $timestamp - $delay }
+                          : POSIX::DBL_MAX );
+    } else {
+      die qq{Unknown event type: $event_type};
+    }
+  }
+}
+
+if ( not defined $first_timestamp ) {
+    die q{Must have at least one event};
+}
+
+# calculate statistics
+my $duration = ($last_timestamp - $first_timestamp) / 1000.0;
+my $average_capacity = ($capacity_sum / $duration) / 1000000.0;
+my $average_throughput = ($departure_sum / $duration) / 1000000.0;
+
+if ( scalar @delays == 0 ) {
+  die q{Must have at least one departure event};
+}
+
+@delays = sort { $a <=> $b } @delays;
+
+my $pp95 = $delays[ int(0.95 * scalar @delays) ];
+
+# measure signal delay every millisecond
+# = minimum time for a message created at time t to get to receiver
+my @signal_delay_samples = sort { $a <=> $b } keys %signal_delay;
+
+for ( my $ts = $signal_delay_samples[ -1 ]; $ts >= $signal_delay_samples[ 0 ]; $ts-- ) {
+  if ( not defined $signal_delay{ $ts } ) {
+    $signal_delay{ $ts } = $signal_delay{ $ts + 1 } + 1;
+  }
+}
+
+my @signal_delays = sort { $a <=> $b } values %signal_delay;
+my $pp95s = $signal_delays[ int(0.95 * scalar @signal_delays) ];
+
+# Print the results
+printf qq{Average capacity: %.2f Mbits/s\n}, $average_capacity;
+printf qq{Average throughput: %.2f Mbits/s (%.1f%% utilization)\n}, $average_throughput, 100.0 * $average_throughput / $average_capacity;
+printf qq{95th percentile per-packet queueing delay: %.0f ms\n}, $pp95;
+printf qq{95th percentile signal delay: %.0f ms\n}, $pp95s;
+
+sub min {
+  my $minval = POSIX::DBL_MAX;
+
+  for ( @_ ) {
+    if ( $_ < $minval ) {
+      $minval = $_;
+    }
+  }
+
+  return $minval;
+}
+
+sub max {
+  my $maxval = - POSIX::DBL_MAX;
+
+  for ( @_ ) {
+    if ( $_ > $maxval ) {
+      $maxval = $_;
+    }
+  }
+
+  return $maxval;
+}
+
+# Note: The graph generation part has been removed. If you need it, please let me know and I'll add it back.

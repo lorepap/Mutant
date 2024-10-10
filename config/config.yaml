@@ -18,6 +18,9 @@ server_ip: 10.172.13.12
 server_port: 5201
 iperf_time: 86400
 log_mahimahi: true
+k: 4
+T: 100
+no_samples_mpts: 100
 
 kernel_info:
   - now

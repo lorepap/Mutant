@@ -39,7 +39,7 @@ class Encoder:
         self.net._encoder.build(input_shape=(None, self.input_tensor_spec.shape[0]))
         self.load_weights()
 
-    def load_weights(self, weights_path='encoder_weights.h5'):
+    def load_weights(self, weights_path='encoder_weights_5G.h5'):
         try:
             self.net._encoder.load_weights(weights_path)
             print(f"Successfully loaded weights from {weights_path}")
