@@ -14,7 +14,7 @@ mpts_T: 100
 mpts_step_wait: 0.5
 steps_per_loop: 1
 seq_length: 5
-server_ip: 10.172.13.12
+server_ip: 10.0.2.15
 server_port: 5201
 iperf_time: 86400
 log_mahimahi: true

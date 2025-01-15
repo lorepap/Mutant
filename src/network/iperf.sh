@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Default values
-SERVER_IP="10.172.13.12"
+SERVER_IP="10.0.2.15"
 DURATION=10
 PORT=5201
 OUTPUT_FILE="test.log"

@@ -14,13 +14,12 @@ from src.utils.trace_manager import CellularTraceManager
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Run collection with specified parameters")
-    parser.add_argument("--n_steps", type=int, help="Number of steps", default=5)
+    parser.add_argument("--num_steps", type=int, help="Number of steps", default=5)
     parser.add_argument("--bw", type=int, help="Bandwidth in Mbps")
     parser.add_argument("--bw_factor", type=float, help="Bandwidth factor")
     parser.add_argument("--delay", type=int, help="Delay in ms")
     parser.add_argument("--rtt", type=int, help="RTT in ms")
     parser.add_argument("--bdp_mult", type=float, help="BDP multiplier")
-    parser.add_argument("--num_steps", type=int, help="Number of steps")
     parser.add_argument("--num_fields_kernel", type=int, help="Number of fields in kernel")
     parser.add_argument("--zeta", type=float, help="Zeta value for reward calculation")
     parser.add_argument("--kappa", type=float, help="Kappa value for reward calculation")
@@ -31,10 +30,12 @@ def parse_arguments():
     return parser.parse_args()
 
 def update_config_from_args(config, args):
-    if args.trace_type is not None:
+    if not args.trace_type is None:
         config.trace_type = args.trace_type
-    if args.trace_name is not None:
+    if not args.trace_name is None and args.trace_type == 'cellular':
         config.cellular_trace_name = args.trace_name
+    if not args.trace_name is None and args.trace_type == 'wired':
+        config.trace_name = args.trace_name
     if args.bw is not None:
         config.bw = args.bw
     if args.bw_factor is not None:
@@ -60,7 +61,12 @@ def update_config_from_args(config, args):
         config.step_wait = args.step_wait
     if args.pool_size is not None:
         config.pool_size = args.pool_size
-    config.model_name = f"{config.trace_type}_{config.cellular_trace_name}_{config.rtt}_k_{config.pool_size}"
+    
+    if args.trace_type == 'cellular':
+        trace_name = config.cellular_trace_name
+    else:
+        trace_name = config.trace_name
+    config.model_name = f"{config.trace_type}_{trace_name}_{config.rtt}_k_{config.pool_size}"
 
 def setup_environment(config, kernel_thread):
     observation_spec = tensor_spec.TensorSpec(
@@ -103,6 +109,9 @@ def mpts_most_selected(config: Config, file_path: str, k: int = 4):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return []
+    
+def select_test_pool(k: int):
+    return [x for x in range(k)]
 
 def main():
 
@@ -111,7 +120,8 @@ def main():
     update_config_from_args(config, args)
     comm_manager = CommManager(config)
     kernel_request = KernelRequest(config.num_fields_kernel, comm_manager.netlink_communicator) # we can just setup a universe with all instantiated object
-    pool = mpts_most_selected(config, f'most_selected_arms_{args.trace_name}', config.k)
+    #pool = mpts_most_selected(config, f'most_selected_arms_{args.trace_name}', config.k)
+    pool = select_test_pool(k=4)
     config.pool = pool
     env = setup_environment(config, kernel_request)
     runner = RLRunner(config, env)

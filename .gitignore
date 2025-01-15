@@ -212,3 +212,5 @@ analysis/plots/
 
 # External
 sage/
+log/rl
+*.csv
